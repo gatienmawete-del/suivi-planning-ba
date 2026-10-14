@@ -3521,8 +3521,8 @@ select u.id, '2026-09-21'::date, 0, NULL, 'validated' from u
 on conflict (user_id, week_start) do nothing;
 with u as (select id from profiles where email = 'indrix.muriel.abolawe@ba-tracker.local' limit 1)
 insert into vacations (user_id, start_date, end_date, days_count, interim_text, status)
-select u.id, '2026-09-21'::date, '2026-07-15'::date, null, NULL, 'requested' from u
-where not exists (select 1 from vacations v where v.user_id = u.id and v.start_date = '2026-09-21'::date);
+select u.id, '2026-07-15'::date, '2026-09-21'::date, null, NULL, 'requested' from u
+where not exists (select 1 from vacations v where v.user_id = u.id and v.start_date = '2026-07-15'::date);
 with u as (select id from profiles where email = 'esther.mban@ba-tracker.local' limit 1)
 insert into weekly_plans (user_id, week_start, bench, general_comments, status)
 select u.id, '2026-09-21'::date, 0, NULL, 'validated' from u

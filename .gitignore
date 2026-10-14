@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 # deps
+=======
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+>>>>>>> a3184a5b3cb4fe47fe61c75bee8c97065673eeee
 /node_modules
 /.pnp
 .pnp.js
@@ -21,9 +27,14 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+<<<<<<< HEAD
 .pnpm-debug.log*
 
 # env
+=======
+
+# local env files
+>>>>>>> a3184a5b3cb4fe47fe61c75bee8c97065673eeee
 .env*.local
 .env
 
@@ -33,6 +44,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+<<<<<<< HEAD
 
 # scripts intermediate (users-data.json is kept — needed by seed-users.mjs)
 scripts/data.json
+=======
+>>>>>>> a3184a5b3cb4fe47fe61c75bee8c97065673eeee
