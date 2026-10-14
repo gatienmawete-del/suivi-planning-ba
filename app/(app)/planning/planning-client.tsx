@@ -132,6 +132,8 @@ export function PlanningClient(props: Props) {
   const currentWeek = isCurrentWeek(props.weekStart);
   // Semaines passées = archivées (lecture seule). Semaine courante = modifiable (sauf si validé)
   const locked = pastWeek || isValidated;
+  // Les objectifs restent toujours modifiables pour la semaine en cours
+  const objectivesLocked = pastWeek && !currentWeek;
 
   return (
     <div className="space-y-6">
@@ -368,7 +370,7 @@ export function PlanningClient(props: Props) {
           <AddObjectiveDialog
             planId={props.plan.id}
             projects={props.allProjects}
-            disabled={locked}
+            disabled={objectivesLocked}
           />
         </CardHeader>
         <CardContent>
@@ -379,7 +381,7 @@ export function PlanningClient(props: Props) {
           ) : (
             <div className="space-y-3">
               {props.objectives.map((obj) => (
-                <ObjectiveCard key={obj.id} obj={obj} projects={props.allProjects} disabled={locked} />
+                <ObjectiveCard key={obj.id} obj={obj} projects={props.allProjects} disabled={objectivesLocked} />
               ))}
             </div>
           )}
