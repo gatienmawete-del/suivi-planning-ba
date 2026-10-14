@@ -125,6 +125,158 @@ export async function deleteUser(userId: string) {
   revalidatePath("/admin/users");
 }
 
+// ---------- Plans BA (admin édite) ----------
+
+/**
+ * Récupère ou crée le plan d'un BA pour une semaine donnée.
+ * L'admin peut le faire pour n'importe quel utilisateur.
+ */
+export async function ensureWeeklyPlanForUser(userId: string, weekStart: string) {
+  await requireAdmin();
+  const admin = createAdminClient();
+
+  const { data: existing } = await admin
+    .from("weekly_plans")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("week_start", weekStart)
+    .maybeSingle();
+
+  if (existing) return existing;
+
+  const { data, error } = await admin
+    .from("weekly_plans")
+    .insert({ user_id: userId, week_start: weekStart, status: "draft" })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function adminUpdatePlanMeta(input: {
+  planId: string;
+  bench?: number | null;
+  comments?: string | null;
+}) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("weekly_plans")
+    .update({
+      bench: input.bench,
+      general_comments: input.comments,
+    })
+    .eq("id", input.planId);
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
+export async function adminUpsertPlanProject(input: {
+  planId: string;
+  projectId: string;
+  allocation: number;
+}) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin.from("plan_projects").upsert(
+    {
+      plan_id: input.planId,
+      project_id: input.projectId,
+      allocation_percent: input.allocation,
+    },
+    { onConflict: "plan_id,project_id" },
+  );
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
+export async function adminDeletePlanProject(id: string) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin.from("plan_projects").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
+export async function adminCreateDeliverable(input: {
+  planId: string;
+  projectId?: string | null;
+  title: string;
+  description?: string | null;
+  status?: string;
+  priority?: string;
+  dueDate?: string | null;
+}) {
+  await requireAdmin();
+  const admin = createAdminClient();
+
+  const { data: maxOrder } = await admin
+    .from("deliverables")
+    .select("order_idx")
+    .eq("plan_id", input.planId)
+    .order("order_idx", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await admin.from("deliverables").insert({
+    plan_id: input.planId,
+    project_id: input.projectId || null,
+    title: input.title,
+    description: input.description || null,
+    status: input.status ?? "todo",
+    priority: input.priority ?? "medium",
+    due_date: input.dueDate || null,
+    order_idx: (maxOrder?.order_idx ?? -1) + 1,
+  });
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
+export async function adminUpdateDeliverable(
+  id: string,
+  patch: Record<string, unknown>,
+) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const update: Record<string, unknown> = { ...patch };
+  if (patch.status === "done") update.completed_at = new Date().toISOString();
+  if (patch.status && patch.status !== "done") update.completed_at = null;
+  const { error } = await admin.from("deliverables").update(update).eq("id", id);
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
+export async function adminDeleteDeliverable(id: string) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin.from("deliverables").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
+export async function adminValidatePlan(planId: string) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("weekly_plans")
+    .update({ status: "validated", validated_at: new Date().toISOString() })
+    .eq("id", planId);
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
+export async function adminResetPlanToDraft(planId: string) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("weekly_plans")
+    .update({ status: "draft", submitted_at: null, validated_at: null })
+    .eq("id", planId);
+  if (error) throw error;
+  revalidatePath("/admin/team");
+}
+
 // ---------- Projects ----------
 
 const projectSchema = z.object({

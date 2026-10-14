@@ -37,7 +37,7 @@ const items: Item[] = [
   { href: "/admin/analytics", label: "Analytique", icon: LineChart, adminOnly: true },
 ];
 
-export function Sidebar({ isAdmin, userName }: { isAdmin: boolean; userName: string }) {
+export function Sidebar({ isAdmin, userName, userEmail }: { isAdmin: boolean; userName: string; userEmail?: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -172,6 +172,9 @@ export function Sidebar({ isAdmin, userName }: { isAdmin: boolean; userName: str
             </form>
             <div className="mt-3 truncate border-t pt-3 text-xs text-muted-foreground">
               Connecté : <span className="font-medium text-foreground/80">{userName}</span>
+              {userEmail && (
+                <div className="mt-0.5 truncate text-[11px] text-muted-foreground/70">{userEmail}</div>
+              )}
             </div>
           </div>
         </div>

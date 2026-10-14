@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { mondayOf, isoDate, weekLabel } from "@/lib/utils";
 import { TeamNav } from "./team-nav";
 import { TeamActions } from "./team-actions";
+import Link from "next/link";
 import {
   Users2,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   AlertCircle,
   Plane,
   CalendarDays,
+  ExternalLink,
 } from "lucide-react";
 import { PLAN_STATUS_LABELS, VACATION_STATUS_LABELS } from "@/lib/types";
 
@@ -175,14 +177,32 @@ export default async function TeamPage({
                       )}
                       <span>bench {plan.bench ?? 0}</span>
                     </div>
-                    {plan.status === "submitted" && (
-                      <TeamActions planId={plan.id} />
-                    )}
+                    <div className="flex items-center gap-2">
+                      {plan.status === "submitted" && (
+                        <TeamActions planId={plan.id} />
+                      )}
+                      <Link
+                        href={`/admin/team/${u.id}?week=${weekStart}`}
+                        className="ml-auto inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Voir / Modifier
+                      </Link>
+                    </div>
                   </>
                 ) : (
-                  <p className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
-                    Le BA n&apos;a pas encore renseigné sa semaine
-                  </p>
+                  <div className="space-y-3">
+                    <p className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
+                      Le BA n&apos;a pas encore renseigné sa semaine
+                    </p>
+                    <Link
+                      href={`/admin/team/${u.id}?week=${weekStart}`}
+                      className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Créer / Modifier le plan
+                    </Link>
+                  </div>
                 )}
               </CardContent>
             </Card>

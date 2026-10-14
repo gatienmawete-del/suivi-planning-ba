@@ -1,16 +1,32 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { Sidebar } from "@/components/sidebar";
 
-export const metadata: Metadata = {
-  title: "BA Tracker — Suivi des activités",
-  description:
-    "Plateforme de suivi hebdomadaire des activités, livrables et objectifs des Business Analysts.",
-};
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+  if (!user) redirect("/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) {
+    // Profil pas encore matérialisé (devrait être rare grâce au trigger)
+    redirect("/login");
+  }
+
   return (
-    <html lang="fr" suppressHydrationWarning>
-      <body className="min-h-screen bg-background font-sans antialiased">{children}</body>
-    </html>
+    <div className="flex min-h-screen bg-muted/20">
+      <Sidebar isAdmin={profile.role === "admin"} userName={profile.full_name} userEmail={profile.email} />
+      <main className="flex-1 overflow-x-hidden">
+        <div className="mx-auto w-full max-w-7xl p-4 md:p-8">{children}</div>
+      </main>
+    </div>
   );
 }
