@@ -17,13 +17,14 @@ export default async function PlanningPage({
   // S'assurer que le plan existe pour cette semaine
   const plan = await ensureWeeklyPlan(weekStart);
 
-  const [{ data: projects }, { data: assignments }, { data: planProjects }, { data: deliverables }, { data: profile }] =
+  const [{ data: projects }, { data: assignments }, { data: planProjects }, { data: deliverables }, { data: profile }, { data: objectives }] =
     await Promise.all([
       supabase.from("projects").select("*").eq("active", true).order("name"),
       supabase.from("assignments").select("*, projects(*)").eq("user_id", plan.user_id),
       supabase.from("plan_projects").select("*, projects(*)").eq("plan_id", plan.id),
       supabase.from("deliverables").select("*").eq("plan_id", plan.id).order("order_idx"),
       supabase.from("profiles").select("*").eq("id", plan.user_id).single(),
+      supabase.from("objectives").select("*").eq("user_id", plan.user_id).eq("plan_id", plan.id).order("created_at"),
     ]);
 
   return (
@@ -36,6 +37,7 @@ export default async function PlanningPage({
       assignments={assignments ?? []}
       planProjects={planProjects ?? []}
       deliverables={deliverables ?? []}
+      objectives={objectives ?? []}
     />
   );
 }

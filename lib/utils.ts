@@ -35,6 +35,18 @@ export function weekLabel(start: string | Date): string {
   return `${fmt.format(d)} – ${fmt.format(end)}`;
 }
 
+/** Vérifie si une date weekStart correspond à la semaine en cours. */
+export function isCurrentWeek(weekStart: string): boolean {
+  const current = isoDate(mondayOf());
+  return weekStart === current;
+}
+
+/** Vérifie si une semaine est passée (avant la semaine en cours). */
+export function isPastWeek(weekStart: string): boolean {
+  const current = isoDate(mondayOf());
+  return weekStart < current;
+}
+
 export function initials(name: string): string {
   return name
     .split(/\s+/)
