@@ -27,19 +27,51 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: pas de code entre createServerClient et getUser()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const { pathname } = request.nextUrl;
 
-  const isAuthPage = pathname.startsWith("/login") || (pathname.startsWith("/auth") && !pathname.startsWith("/auth/signout"));
+  // Laisser passer les routes de signout sans vérification
+  if (pathname.startsWith("/auth/signout")) {
+    return supabaseResponse;
+  }
+
+  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/auth");
   const isPublic =
     pathname === "/" ||
     isAuthPage ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/public");
+
+  // IMPORTANT: pas de code entre createServerClient et getUser()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  // Si erreur d'auth (token corrompu/expiré) et pas sur une page publique,
+  // on redirige vers login en nettoyant les cookies pour casser la boucle
+  if (error && !isPublic) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    const response = NextResponse.redirect(url);
+    // Supprimer tous les cookies Supabase pour éviter la boucle
+    request.cookies.getAll().forEach((cookie) => {
+      if (cookie.name.startsWith("sb-")) {
+        response.cookies.set(cookie.name, "", { maxAge: 0, path: "/" });
+      }
+    });
+    return response;
+  }
+
+  // Si erreur d'auth sur page publique (ex: /login), nettoyer les cookies stale
+  // pour que le user ne soit pas considéré comme connecté au prochain appel
+  if (error && isAuthPage) {
+    request.cookies.getAll().forEach((cookie) => {
+      if (cookie.name.startsWith("sb-")) {
+        supabaseResponse.cookies.set(cookie.name, "", { maxAge: 0, path: "/" });
+      }
+    });
+    return supabaseResponse;
+  }
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -48,7 +80,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthPage) {
+  // Rediriger vers dashboard SEULEMENT si user valide (pas d'erreur)
+  if (user && !error && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
