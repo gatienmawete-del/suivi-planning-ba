@@ -75,6 +75,7 @@ export type Objective = {
   id: string;
   user_id: string;
   plan_id: string | null;
+  project_id: string | null;
   title: string;
   description: string | null;
   target_date: string | null;

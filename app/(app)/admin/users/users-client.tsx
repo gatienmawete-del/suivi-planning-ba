@@ -387,6 +387,7 @@ function EditUserDialog({
   onDone: () => void;
 }) {
   const [fullName, setFullName] = useState(user.full_name);
+  const [email, setEmail] = useState(user.email);
   const [serviceLine, setServiceLine] = useState(user.service_line ?? "BA");
   const [role, setRole] = useState<"admin" | "ba">(user.role);
   const [projectIds, setProjectIds] = useState<string[]>(currentProjectIds);
@@ -407,6 +408,7 @@ function EditUserDialog({
       await updateUser({
         id: user.id,
         fullName,
+        email,
         serviceLine,
         role,
         projectIds,
@@ -432,6 +434,10 @@ function EditUserDialog({
             <div className="space-y-2">
               <Label>Nom complet</Label>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label>Service</Label>

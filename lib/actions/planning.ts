@@ -181,6 +181,7 @@ export async function deleteDeliverable(id: string) {
 
 const objectiveSchema = z.object({
   planId: z.string().uuid().nullable().optional(),
+  projectId: z.string().uuid().nullable().optional(),
   title: z.string().min(1).max(300),
   description: z.string().max(5000).nullable().optional(),
   targetDate: z.string().nullable().optional(),
@@ -196,6 +197,7 @@ export async function createObjective(input: z.infer<typeof objectiveSchema>) {
   const { error } = await supabase.from("objectives").insert({
     user_id: user.id,
     plan_id: parsed.planId || null,
+    project_id: parsed.projectId || null,
     title: parsed.title,
     description: parsed.description || null,
     target_date: parsed.targetDate || null,

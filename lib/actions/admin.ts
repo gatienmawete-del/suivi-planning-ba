@@ -74,6 +74,7 @@ export async function createUser(input: z.infer<typeof createUserSchema>) {
 const updateUserSchema = z.object({
   id: z.string().uuid(),
   fullName: z.string().min(2).max(200).optional(),
+  email: z.string().email().optional(),
   serviceLine: z.string().nullable().optional(),
   role: z.enum(["admin", "ba"]).optional(),
   active: z.boolean().optional(),
@@ -85,8 +86,18 @@ export async function updateUser(input: z.infer<typeof updateUserSchema>) {
   const parsed = updateUserSchema.parse(input);
   const admin = createAdminClient();
 
+  // Update email in Supabase Auth if changed
+  if (parsed.email !== undefined) {
+    const { error: authErr } = await admin.auth.admin.updateUserById(parsed.id, {
+      email: parsed.email,
+      email_confirm: true,
+    });
+    if (authErr) throw authErr;
+  }
+
   const update: Record<string, unknown> = {};
   if (parsed.fullName !== undefined) update.full_name = parsed.fullName;
+  if (parsed.email !== undefined) update.email = parsed.email;
   if (parsed.serviceLine !== undefined) update.service_line = parsed.serviceLine;
   if (parsed.role !== undefined) update.role = parsed.role;
   if (parsed.active !== undefined) update.active = parsed.active;

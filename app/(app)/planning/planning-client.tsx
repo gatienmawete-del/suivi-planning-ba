@@ -10,6 +10,9 @@ import {
   createDeliverable,
   updateDeliverable,
   deleteDeliverable,
+  createObjective,
+  updateObjectiveProgress,
+  deleteObjective,
 } from "@/lib/actions/planning";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +49,8 @@ import {
   Loader2,
   FolderKanban,
   Flag,
+  Target,
+  Archive,
 } from "lucide-react";
 import {
   DELIVERABLE_STATUS_LABELS,
@@ -58,7 +63,18 @@ import {
   type DeliverablePriority,
   type Project,
 } from "@/lib/types";
-import { addDays, isoDate } from "@/lib/utils";
+import { addDays, isoDate, isCurrentWeek, isPastWeek } from "@/lib/utils";
+
+type Objective = {
+  id: string;
+  title: string;
+  description: string | null;
+  progress: number;
+  status: string;
+  target_date: string | null;
+  plan_id: string | null;
+  project_id?: string | null;
+};
 
 type Props = {
   plan: any;
@@ -69,6 +85,7 @@ type Props = {
   assignments: Array<{ id: string; project_id: string; default_allocation: number | null; projects: Project }>;
   planProjects: Array<{ id: string; project_id: string; allocation_percent: number; projects: Project }>;
   deliverables: Deliverable[];
+  objectives: Objective[];
 };
 
 const STATUSES: DeliverableStatus[] = ["todo", "in_progress", "blocked", "done"];
@@ -77,7 +94,6 @@ export function PlanningClient(props: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  const [bench, setBench] = useState<string>(props.plan.bench?.toString() ?? "0");
   const [comments, setComments] = useState<string>(props.plan.general_comments ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -94,7 +110,6 @@ export function PlanningClient(props: Props) {
     try {
       await updatePlanMeta({
         planId: props.plan.id,
-        bench: parseFloat(bench || "0"),
         comments: comments || null,
       });
       router.refresh();
@@ -113,7 +128,10 @@ export function PlanningClient(props: Props) {
 
   const isValidated = props.plan.status === "validated";
   const isSubmitted = props.plan.status === "submitted";
-  const locked = isValidated;
+  const pastWeek = isPastWeek(props.weekStart);
+  const currentWeek = isCurrentWeek(props.weekStart);
+  // Semaines passées = archivées (lecture seule). Semaine courante = modifiable (sauf si validé)
+  const locked = pastWeek || isValidated;
 
   return (
     <div className="space-y-6">
@@ -149,6 +167,14 @@ export function PlanningClient(props: Props) {
           )}
         </div>
       </div>
+
+      {/* Bannière semaine archivée */}
+      {pastWeek && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          <Archive className="h-4 w-4 shrink-0" />
+          <span>Cette semaine est archivée. Les modifications ne sont plus possibles.</span>
+        </div>
+      )}
 
       {/* Row: Projets + Bench */}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -245,21 +271,15 @@ export function PlanningClient(props: Props) {
             <CardTitle className="flex items-center gap-2">
               <CalendarDays className="h-5 w-5" /> Bench & notes
             </CardTitle>
-            <CardDescription>Taux d&apos;inoccupation (0 = plein, 1 = inactif)</CardDescription>
+            <CardDescription>Le bench est défini par l&apos;administrateur.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="bench">Bench</Label>
-              <Input
-                id="bench"
-                type="number"
-                step="0.1"
-                min={0}
-                max={1}
-                value={bench}
-                onChange={(e) => setBench(e.target.value)}
-                disabled={locked}
-              />
+              <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                <span className="font-semibold tabular-nums">{props.plan.bench ?? 0}</span>
+                <span className="text-xs text-muted-foreground">(défini par l&apos;admin)</span>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="comments">Commentaires</Label>
@@ -331,6 +351,38 @@ export function PlanningClient(props: Props) {
               );
             })}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Objectifs de la semaine */}
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" /> Objectifs de la semaine
+            </CardTitle>
+            <CardDescription>
+              Définis tes objectifs pour cette semaine et suis leur progression.
+            </CardDescription>
+          </div>
+          <AddObjectiveDialog
+            planId={props.plan.id}
+            projects={props.allProjects}
+            disabled={locked}
+          />
+        </CardHeader>
+        <CardContent>
+          {props.objectives.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Aucun objectif pour cette semaine. Clique sur « Nouvel objectif ».
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {props.objectives.map((obj) => (
+                <ObjectiveCard key={obj.id} obj={obj} projects={props.allProjects} disabled={locked} />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -716,7 +768,7 @@ function DeliverableCard({
       <div className="mt-2 flex items-center justify-between gap-1">
         {d.due_date && (
           <span className="text-[10px] text-muted-foreground">
-            📅 {new Date(d.due_date).toLocaleDateString("fr-FR", {
+            {new Date(d.due_date).toLocaleDateString("fr-FR", {
               day: "2-digit",
               month: "short",
             })}
@@ -736,6 +788,225 @@ function DeliverableCard({
             </SelectContent>
           </Select>
         )}
+      </div>
+    </div>
+  );
+}
+
+// --------- Objectifs ---------
+
+function AddObjectiveDialog({
+  planId,
+  projects,
+  disabled,
+}: {
+  planId: string;
+  projects: Project[];
+  disabled: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [targetDate, setTargetDate] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await createObjective({
+        planId,
+        projectId: projectId || null,
+        title,
+        description: description || null,
+        targetDate: targetDate || null,
+        progress: 0,
+      });
+      setOpen(false);
+      setTitle("");
+      setDescription("");
+      setTargetDate("");
+      setProjectId("");
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" disabled={disabled}>
+          <Plus className="h-4 w-4" /> Nouvel objectif
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nouvel objectif</DialogTitle>
+          <DialogDescription>
+            Définis un objectif pour cette semaine.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Projet *</Label>
+            <Select value={projectId} onValueChange={setProjectId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner un projet" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full" style={{ background: p.color ?? "#64748b" }} />
+                      {p.name} ({p.code})
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Titre *</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ex: Finaliser le livrable X"
+              required
+              maxLength={300}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Détails, critères de succès…"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Date cible</Label>
+            <Input
+              type="date"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              Créer
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ObjectiveCard({
+  obj,
+  projects,
+  disabled,
+}: {
+  obj: Objective;
+  projects: Project[];
+  disabled: boolean;
+}) {
+  const router = useRouter();
+  const [progress, setProgress] = useState(obj.progress);
+  const [saving, setSaving] = useState(false);
+
+  async function saveProgress(val: number) {
+    setSaving(true);
+    try {
+      await updateObjectiveProgress(obj.id, val);
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm("Supprimer cet objectif ?")) return;
+    await deleteObjective(obj.id);
+    router.refresh();
+  }
+
+  const statusColor = obj.progress >= 100
+    ? "text-emerald-600 dark:text-emerald-400"
+    : obj.progress > 0
+      ? "text-blue-600 dark:text-blue-400"
+      : "text-muted-foreground";
+
+  const project = obj.project_id ? projects.find((p) => p.id === obj.project_id) : null;
+
+  return (
+    <div className="group flex items-start gap-4 rounded-md border p-4 transition hover:shadow-sm">
+      <div className="flex-1 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            {project && (
+              <span className="mb-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: project.color ?? "#64748b" }} />
+                {project.code}
+              </span>
+            )}
+            <p className="text-sm font-medium">{obj.title}</p>
+            {obj.description && (
+              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{obj.description}</p>
+            )}
+          </div>
+          {!disabled && (
+            <button onClick={remove} className="opacity-0 transition-opacity group-hover:opacity-100 shrink-0">
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <Progress value={progress} className="flex-1" />
+          <span className={`text-xs font-semibold tabular-nums ${statusColor}`}>
+            {progress}%
+          </span>
+        </div>
+        {!disabled && (
+          <div className="flex items-center gap-2">
+            <Input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={progress}
+              onChange={(e) => setProgress(parseInt(e.target.value, 10))}
+              className="h-2 flex-1"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => saveProgress(progress)}
+              disabled={saving || progress === obj.progress}
+              className="h-7 text-xs"
+            >
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sauver"}
+            </Button>
+          </div>
+        )}
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          {obj.target_date && (
+            <span>
+              Cible : {new Date(obj.target_date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
+            </span>
+          )}
+          <Badge variant={obj.progress >= 100 ? "default" : "outline"} className="text-[10px] px-1.5 py-0">
+            {obj.progress >= 100 ? "Atteint" : obj.progress > 0 ? "En cours" : "En attente"}
+          </Badge>
+        </div>
       </div>
     </div>
   );
