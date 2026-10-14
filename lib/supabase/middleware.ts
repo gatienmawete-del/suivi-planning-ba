@@ -87,5 +87,35 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Protection du rôle viewer : accès uniquement à /dashboard et /admin/analytics
+  if (user && !error) {
+    const isAdminRoute = pathname.startsWith("/admin/");
+    const isAnalytics = pathname.startsWith("/admin/analytics");
+    const isBaOnlyRoute =
+      pathname.startsWith("/planning") ||
+      pathname.startsWith("/history") ||
+      pathname.startsWith("/objectives") ||
+      pathname.startsWith("/vacations") ||
+      pathname.startsWith("/settings");
+
+    // Charger le profil pour vérifier le rôle
+    if (isAdminRoute || isBaOnlyRoute) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "viewer") {
+        // Viewer ne peut accéder qu'au dashboard et analytics
+        if ((isAdminRoute && !isAnalytics) || isBaOnlyRoute) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/dashboard";
+          return NextResponse.redirect(url);
+        }
+      }
+    }
+  }
+
   return supabaseResponse;
 }

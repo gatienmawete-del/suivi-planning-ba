@@ -15,33 +15,50 @@ import {
   Menu,
   X,
   Settings,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { UserRole } from "@/lib/types";
 
 type Item = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  /** Visible uniquement pour admin */
   adminOnly?: boolean;
+  /** Visible pour admin ET viewer */
+  adminOrViewer?: boolean;
+  /** Masqué pour les viewers (ex: planning, objectifs personnels) */
+  hideForViewer?: boolean;
 };
 
 const items: Item[] = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/planning", label: "Ma semaine", icon: CalendarDays },
-  { href: "/history", label: "Historique", icon: History },
-  { href: "/objectives", label: "Mes objectifs", icon: Target },
-  { href: "/vacations", label: "Congés", icon: Plane },
+  { href: "/planning", label: "Ma semaine", icon: CalendarDays, hideForViewer: true },
+  { href: "/history", label: "Historique", icon: History, hideForViewer: true },
+  { href: "/objectives", label: "Mes objectifs", icon: Target, hideForViewer: true },
+  { href: "/vacations", label: "Congés", icon: Plane, hideForViewer: true },
   { href: "/admin/team", label: "Équipe", icon: Users2, adminOnly: true },
   { href: "/admin/users", label: "Utilisateurs", icon: Users2, adminOnly: true },
   { href: "/admin/projects", label: "Projets", icon: FolderKanban, adminOnly: true },
-  { href: "/admin/analytics", label: "Analytique", icon: LineChart, adminOnly: true },
+  { href: "/admin/analytics", label: "Analytique", icon: LineChart, adminOrViewer: true },
 ];
 
-export function Sidebar({ isAdmin, userName, userEmail }: { isAdmin: boolean; userName: string; userEmail?: string }) {
+export function Sidebar({ role, userName, userEmail }: { role: UserRole; userName: string; userEmail?: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const visibleItems = items.filter((it) => !it.adminOnly || isAdmin);
+  const isAdmin = role === "admin";
+  const isViewer = role === "viewer";
+
+  const visibleItems = items.filter((it) => {
+    if (it.adminOnly && !isAdmin) return false;
+    if (it.adminOrViewer && !isAdmin && !isViewer) return false;
+    if (it.hideForViewer && isViewer) return false;
+    return true;
+  });
+
+  const roleLabel = isAdmin ? "Administrateur" : isViewer ? "Observateur" : "Analyste";
 
   return (
     <>
@@ -86,20 +103,20 @@ export function Sidebar({ isAdmin, userName, userEmail }: { isAdmin: boolean; us
             <div className="min-w-0">
               <div className="truncate font-semibold leading-none">BA Tracker</div>
               <div className="mt-1 truncate text-xs text-muted-foreground">
-                {isAdmin ? "Administrateur" : "Analyste"}
+                {roleLabel}
               </div>
             </div>
           </div>
 
           {/* Nav */}
           <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-            {!isAdmin ? null : (
+            {(isAdmin || isViewer) && (
               <div className="mb-1 px-3 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Perso
+                {isViewer ? "Vue globale" : "Perso"}
               </div>
             )}
             {visibleItems
-              .filter((it) => !it.adminOnly)
+              .filter((it) => !it.adminOnly && !it.adminOrViewer)
               .map((it) => {
                 const active = pathname === it.href || pathname.startsWith(it.href + "/");
                 const Icon = it.icon;
@@ -121,13 +138,14 @@ export function Sidebar({ isAdmin, userName, userEmail }: { isAdmin: boolean; us
                 );
               })}
 
-            {isAdmin && (
+            {/* Section Admin ou Viewer analytique */}
+            {(isAdmin || isViewer) && (
               <>
                 <div className="mb-1 mt-5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Administration
+                  {isViewer ? "Consultation" : "Administration"}
                 </div>
                 {visibleItems
-                  .filter((it) => it.adminOnly)
+                  .filter((it) => it.adminOnly || it.adminOrViewer)
                   .map((it) => {
                     const active = pathname === it.href || pathname.startsWith(it.href + "/");
                     const Icon = it.icon;
@@ -154,13 +172,15 @@ export function Sidebar({ isAdmin, userName, userEmail }: { isAdmin: boolean; us
 
           {/* Pied */}
           <div className="border-t p-3">
-            <Link
-              href="/settings"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground/70 hover:bg-accent hover:text-foreground"
-            >
-              <Settings className="h-4 w-4" />
-              Paramètres
-            </Link>
+            {!isViewer && (
+              <Link
+                href="/settings"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground/70 hover:bg-accent hover:text-foreground"
+              >
+                <Settings className="h-4 w-4" />
+                Paramètres
+              </Link>
+            )}
             <form action="/auth/signout" method="post">
               <button
                 type="submit"

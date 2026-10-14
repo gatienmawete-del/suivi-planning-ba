@@ -103,8 +103,8 @@ export function UsersClient({
                     </TableCell>
                     <TableCell>{u.service_line ?? "—"}</TableCell>
                     <TableCell>
-                      <Badge variant={u.role === "admin" ? "default" : "secondary"}>
-                        {u.role === "admin" ? "Admin" : "BA"}
+                      <Badge variant={u.role === "admin" ? "default" : u.role === "viewer" ? "outline" : "secondary"}>
+                        {u.role === "admin" ? "Admin" : u.role === "viewer" ? "Viewer" : "BA"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -162,7 +162,7 @@ function CreateUserDialog({ projects, onDone }: { projects: Project[]; onDone: (
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [serviceLine, setServiceLine] = useState<string>("BA");
-  const [role, setRole] = useState<"admin" | "ba">("ba");
+  const [role, setRole] = useState<"admin" | "ba" | "viewer">("ba");
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -203,7 +203,7 @@ function CreateUserDialog({ projects, onDone }: { projects: Project[]; onDone: (
         <DialogHeader>
           <DialogTitle>Nouvel utilisateur</DialogTitle>
           <DialogDescription>
-            Crée un compte BA ou admin, et affecte-le immédiatement à des projets.
+            Crée un compte BA, admin ou viewer, et affecte-le immédiatement à des projets.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -248,13 +248,14 @@ function CreateUserDialog({ projects, onDone }: { projects: Project[]; onDone: (
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Rôle</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as "admin" | "ba")}>
+              <Select value={role} onValueChange={(v) => setRole(v as "admin" | "ba" | "viewer")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ba">BA</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="viewer">Viewer (lecture seule)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -389,7 +390,7 @@ function EditUserDialog({
   const [fullName, setFullName] = useState(user.full_name);
   const [email, setEmail] = useState(user.email);
   const [serviceLine, setServiceLine] = useState(user.service_line ?? "BA");
-  const [role, setRole] = useState<"admin" | "ba">(user.role);
+  const [role, setRole] = useState<"admin" | "ba" | "viewer">(user.role);
   const [projectIds, setProjectIds] = useState<string[]>(currentProjectIds);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -454,13 +455,14 @@ function EditUserDialog({
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Rôle</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as "admin" | "ba")}>
+              <Select value={role} onValueChange={(v) => setRole(v as "admin" | "ba" | "viewer")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ba">BA</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="viewer">Viewer (lecture seule)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

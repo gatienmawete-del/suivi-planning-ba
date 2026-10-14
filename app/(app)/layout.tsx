@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-muted/20">
-      <Sidebar isAdmin={profile.role === "admin"} userName={profile.full_name} />
+      <Sidebar role={profile.role} userName={profile.full_name} userEmail={profile.email} />
       <main className="flex-1 overflow-x-hidden">
         <div className="mx-auto w-full max-w-7xl p-4 md:p-8">{children}</div>
       </main>
