@@ -19,9 +19,9 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { createUser, updateUser, resetUserPassword, deleteUser } from "@/lib/actions/admin";
+import { createUser, updateUser, resetUserPassword, deleteUser, purgeUser } from "@/lib/actions/admin";
 import { SERVICE_LINES, type Profile, type Project } from "@/lib/types";
-import { Plus, Users2, Loader2, Edit, KeyRound, PowerOff, Power, Search } from "lucide-react";
+import { Plus, Users2, Loader2, Edit, KeyRound, PowerOff, Power, Search, Trash2, AlertTriangle } from "lucide-react";
 
 export function UsersClient({
   users,
@@ -328,6 +328,7 @@ function UserActions({
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [purgeOpen, setPurgeOpen] = useState(false);
 
   async function toggleActive() {
     if (!confirm(user.active ? "Désactiver cet utilisateur ?" : "Réactiver cet utilisateur ?")) return;
@@ -350,6 +351,16 @@ function UserActions({
       <Button variant="ghost" size="icon" onClick={toggleActive} aria-label="Statut">
         {user.active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
       </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setPurgeOpen(true)}
+        aria-label="Supprimer définitivement"
+        title="Supprimer définitivement"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
 
       {editOpen && (
         <EditUserDialog
@@ -366,6 +377,14 @@ function UserActions({
           user={user}
           open={pwOpen}
           onOpenChange={setPwOpen}
+        />
+      )}
+      {purgeOpen && (
+        <PurgeUserDialog
+          user={user}
+          open={purgeOpen}
+          onOpenChange={setPurgeOpen}
+          onDone={onDone}
         />
       )}
     </div>
@@ -576,6 +595,91 @@ function ResetPasswordDialog({
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               Changer
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PurgeUserDialog({
+  user,
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  user: Profile;
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  onDone: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const canDelete = confirmText.trim() === user.full_name.trim();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canDelete) return;
+    setErr(null);
+    setLoading(true);
+    try {
+      await purgeUser(user.id);
+      onOpenChange(false);
+      onDone();
+    } catch (e: any) {
+      setErr(e.message ?? "Erreur");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" /> Supprimer définitivement
+          </DialogTitle>
+          <DialogDescription>
+            Cette action est <b>irréversible</b>. Le compte de <b>{user.full_name}</b> ({user.email}) sera
+            supprimé avec tout son historique.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4">
+          <ul className="list-disc space-y-1 rounded-md border border-destructive/30 bg-destructive/5 py-3 pl-8 pr-3 text-sm">
+            <li>Plannings hebdomadaires et allocations projets</li>
+            <li>Livrables et objectifs</li>
+            <li>Congés et affectations aux projets</li>
+            <li>Compte de connexion et journal d&apos;activité</li>
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            Astuce : pour garder l&apos;historique, utilise plutôt le bouton « Désactiver ».
+          </p>
+          <div className="space-y-2">
+            <Label>
+              Pour confirmer, tape le nom complet : <b>{user.full_name}</b>
+            </Label>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              autoComplete="off"
+              placeholder={user.full_name}
+            />
+          </div>
+          {err && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {err}
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" variant="destructive" disabled={!canDelete || loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Supprimer définitivement
             </Button>
           </DialogFooter>
         </form>

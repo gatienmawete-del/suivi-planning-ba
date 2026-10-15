@@ -14,7 +14,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") redirect("/dashboard");
+  // Admin : accès complet. Viewer : le middleware le limite à /admin/analytics.
+  if (profile?.role !== "admin" && profile?.role !== "viewer") redirect("/dashboard");
 
   return <>{children}</>;
 }

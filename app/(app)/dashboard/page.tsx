@@ -17,6 +17,7 @@ import {
   Plane,
   Users2,
 } from "lucide-react";
+import { ExportDialog } from "@/components/export-dialog";
 import { DELIVERABLE_STATUS_LABELS, DELIVERABLE_STATUS_COLORS, PLAN_STATUS_LABELS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -347,14 +348,17 @@ async function TeamDashboard({
             Semaine du {weekLabel(weekStart)} — vue d&apos;ensemble de toute l&apos;équipe
           </p>
         </div>
-        {profile.role === "admin" && (
-          <Button asChild>
-            <Link href="/admin/team">
-              <Users2 className="h-4 w-4" />
-              Gérer l&apos;équipe
-            </Link>
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportDialog users={users.map((u: any) => ({ id: u.id, full_name: u.full_name }))} />
+          {profile.role === "admin" && (
+            <Button asChild>
+              <Link href="/admin/team">
+                <Users2 className="h-4 w-4" />
+                Gérer l&apos;équipe
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* KPIs globaux */}

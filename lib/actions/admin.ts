@@ -136,6 +136,48 @@ export async function deleteUser(userId: string) {
   revalidatePath("/admin/users");
 }
 
+/**
+ * Suppression DÉFINITIVE d'un utilisateur et de tout son historique.
+ * La suppression du compte auth entraîne en cascade (FK on delete cascade) :
+ * profil, affectations, plans hebdo, projets du plan, livrables, objectifs, congés.
+ * Le journal d'activité est purgé explicitement (sa FK est en "set null").
+ */
+export async function purgeUser(userId: string) {
+  const { userId: currentUserId } = await requireAdmin();
+  z.string().uuid().parse(userId);
+  if (userId === currentUserId) {
+    throw new Error("Tu ne peux pas supprimer ton propre compte.");
+  }
+
+  const admin = createAdminClient();
+
+  // Journal d'activité (sinon il resterait anonymisé)
+  await admin.from("activity_log").delete().eq("user_id", userId);
+
+  // Suppression explicite des données (au cas où une FK ne serait pas en cascade)
+  const { data: plans } = await admin.from("weekly_plans").select("id").eq("user_id", userId);
+  const planIds = (plans ?? []).map((p: { id: string }) => p.id);
+  if (planIds.length) {
+    await admin.from("deliverables").delete().in("plan_id", planIds);
+    await admin.from("plan_projects").delete().in("plan_id", planIds);
+  }
+  await admin.from("objectives").delete().eq("user_id", userId);
+  await admin.from("vacations").delete().eq("user_id", userId);
+  await admin.from("weekly_plans").delete().eq("user_id", userId);
+  await admin.from("assignments").delete().eq("user_id", userId);
+
+  // Compte d'authentification (+ profil en cascade)
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw error;
+
+  // Filet de sécurité si le profil n'était pas lié en cascade
+  await admin.from("profiles").delete().eq("id", userId);
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/team");
+  revalidatePath("/dashboard");
+}
+
 // ---------- Plans BA (admin édite) ----------
 
 /**
