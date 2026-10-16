@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, CheckCircle2, Clock, History as HistoryIcon } from "lucide-react";
 import { weekLabel } from "@/lib/utils";
-import { PLAN_STATUS_LABELS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -51,8 +50,8 @@ export default async function HistoryPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">Semaine du {weekLabel(p.week_start)}</CardTitle>
-                    <Badge variant={p.status === "validated" ? "default" : p.status === "submitted" ? "secondary" : "outline"}>
-                      {PLAN_STATUS_LABELS[p.status as keyof typeof PLAN_STATUS_LABELS]}
+                    <Badge variant={total > 0 && done === total ? "default" : "outline"}>
+                      {done}/{total} livrable{total > 1 ? "s" : ""} terminé{done > 1 ? "s" : ""}
                     </Badge>
                   </div>
                   <CardDescription>

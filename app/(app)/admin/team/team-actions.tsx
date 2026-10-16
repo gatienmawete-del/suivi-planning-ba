@@ -3,32 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, X, CheckCircle2, Loader2 } from "lucide-react";
-import { validatePlan } from "@/lib/actions/planning";
+import { Check, X } from "lucide-react";
 import { decideVacation } from "@/lib/actions/vacations";
 
-export function TeamActions({ planId, vacationId }: { planId?: string; vacationId?: string }) {
+export function TeamActions({ vacationId }: { vacationId?: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-
-  if (planId) {
-    return (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() =>
-          start(async () => {
-            await validatePlan(planId);
-            router.refresh();
-          })
-        }
-        disabled={pending}
-      >
-        {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-        Valider la semaine
-      </Button>
-    );
-  }
 
   if (vacationId) {
     return (

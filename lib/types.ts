@@ -29,6 +29,7 @@ export type Assignment = {
   default_allocation: number | null;
 };
 
+/** Colonne conservée en base mais plus utilisée (les statuts de plan ont été retirés). */
 export type PlanStatus = "draft" | "submitted" | "validated";
 
 export type WeeklyPlan = {
@@ -138,12 +139,6 @@ export const PRIORITY_LABELS: Record<DeliverablePriority, string> = {
   medium: "Normale",
   high: "Haute",
   critical: "Critique",
-};
-
-export const PLAN_STATUS_LABELS: Record<PlanStatus, string> = {
-  draft: "Brouillon",
-  submitted: "Soumis",
-  validated: "Validé",
 };
 
 export const VACATION_STATUS_LABELS: Record<VacationStatus, string> = {

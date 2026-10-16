@@ -2,11 +2,9 @@ import ExcelJS from "exceljs";
 
 /* =====================================================================
  * Rapport Excel BA Tracker
- *  - Synthèse      : KPIs par semaine (+ totaux en formules)
- *  - Charge projets: ETP par projet et par semaine
  *  - Allocation BA : % alloué par BA et par semaine (alerte > 100 %)
- *  - 1 feuille / semaine : statut des plans, allocations, livrables, objectifs
- *  - Objectifs hors semaine (si présents)
+ *  - 1 feuille / semaine : allocations par projet, livrables, objectifs
+ *  - Objectifs long terme (objectifs non rattachés à une semaine)
  * ===================================================================== */
 
 export type ExportUser = {
@@ -22,11 +20,6 @@ export type ExportPlan = {
   id: string;
   user_id: string;
   week_start: string;
-  status: "draft" | "submitted" | "validated";
-  bench: number | null;
-  general_comments: string | null;
-  submitted_at: string | null;
-  validated_at: string | null;
 };
 export type ExportPlanProject = { plan_id: string; project_id: string; allocation_percent: number };
 export type ExportDeliverable = {
@@ -92,12 +85,6 @@ const DELIV_STATUS: Record<string, { label: string; fill: string; font: string }
   in_progress: { label: "En cours", fill: "FFDBEAFE", font: "FF1D4ED8" },
   blocked: { label: "Bloqué", fill: "FFFEE2E2", font: "FFB91C1C" },
   done: { label: "Terminé", fill: "FFD1FAE5", font: "FF047857" },
-};
-const PLAN_STATUS: Record<string, { label: string; fill: string; font: string }> = {
-  draft: { label: "Brouillon", fill: "FFF1F5F9", font: "FF475569" },
-  submitted: { label: "Soumis", fill: "FFFEF3C7", font: "FFB45309" },
-  validated: { label: "Validé", fill: "FFD1FAE5", font: "FF047857" },
-  none: { label: "Non renseigné", fill: "FFFFFFFF", font: "FF94A3B8" },
 };
 const PRIORITY: Record<string, { label: string; font: string; rank: number }> = {
   critical: { label: "Critique", font: "FFDC2626", rank: 0 },
@@ -338,258 +325,9 @@ export async function buildWeeklyReport(data: ExportData): Promise<Buffer> {
     return { week: w, sheet: sheetNameForWeek(w), plans, delivs, objs, pps };
   });
 
-  /* ---------------- 1. SYNTHÈSE ---------------- */
-  const syn = wb.addWorksheet("Synthèse", {
-    properties: { tabColor: { argb: C.navy } },
-    views: [{ state: "frozen", ySplit: 7, showGridLines: false }],
-  });
-  const synCols = [
-    { h: "Semaine", w: 22 },
-    { h: "Période", w: 18 },
-    { h: "Plans renseignés", w: 11 },
-    { h: "Validés", w: 9 },
-    { h: "Soumis", w: 9 },
-    { h: "Brouillons", w: 10 },
-    { h: "Livrables", w: 10 },
-    { h: "Terminés", w: 10 },
-    { h: "En cours", w: 10 },
-    { h: "Bloqués", w: 9 },
-    { h: "Taux de complétion", w: 13 },
-    { h: "Objectifs", w: 10 },
-    { h: "Progression moy. objectifs", w: 14 },
-    { h: "Allocation moy. / BA", w: 13 },
-  ];
-  synCols.forEach((c, i) => (syn.getColumn(i + 1).width = c.w));
-  const synLast = synCols.length;
-  banner(syn, synLast, "BA Tracker — Rapport d'activité hebdomadaire", `${periodLabel}   ·   ${data.scopeLabel}   ·   Généré le ${generated} par ${data.generatedBy}`);
-
-  const totDeliv = data.deliverables.length;
-  const totDone = data.deliverables.filter((d) => d.status === "done").length;
-  const totBlocked = data.deliverables.filter((d) => d.status === "blocked").length;
-  kpiStrip(
-    syn,
-    4,
-    [
-      { label: "Semaines", value: weeks.length },
-      { label: "Membres", value: members.length },
-      { label: "Plans renseignés", value: data.plans.length },
-      { label: "Livrables", value: totDeliv },
-      { label: "Terminés", value: totDeliv ? `${Math.round((totDone / totDeliv) * 100)} %` : "—", color: "FF047857" },
-      { label: "Bloqués", value: totBlocked, color: totBlocked ? "FFB91C1C" : C.text },
-      { label: "Objectifs", value: data.objectives.filter((o) => o.plan_id).length },
-    ],
-    synLast,
-  );
-
-  const synHeaderRow = 7;
-  const hr = syn.getRow(synHeaderRow);
-  synCols.forEach((c, i) => (hr.getCell(i + 1).value = c.h));
-  styleHeaderRow(hr, 1, synLast);
-  hr.height = 32;
-
-  let r = synHeaderRow + 1;
-  const firstDataRow = r;
-  perWeek.forEach((pw, idx) => {
-    const row = syn.getRow(r);
-    const objAvg = pw.objs.length ? pw.objs.reduce((s, o) => s + o.progress, 0) / pw.objs.length / 100 : null;
-    const allocAvg = pw.plans.length
-      ? pw.plans.reduce(
-          (s, p) => s + pw.pps.filter((pp) => pp.plan_id === p.id).reduce((a, pp) => a + pp.allocation_percent, 0),
-          0,
-        ) /
-        pw.plans.length /
-        100
-      : null;
-
-    row.getCell(1).value = { text: `Semaine ${isoWeekNumber(pw.week)}  →`, hyperlink: `#'${pw.sheet}'!A1` };
-    row.getCell(1).font = { color: { argb: C.accent }, underline: true, bold: true, size: 10 };
-    row.getCell(2).value = `${shortDate(pw.week)} – ${shortDate(addDaysIso(pw.week, 6))}`;
-    row.getCell(3).value = pw.plans.length;
-    row.getCell(4).value = pw.plans.filter((p) => p.status === "validated").length;
-    row.getCell(5).value = pw.plans.filter((p) => p.status === "submitted").length;
-    row.getCell(6).value = pw.plans.filter((p) => p.status === "draft").length;
-    row.getCell(7).value = pw.delivs.length;
-    row.getCell(8).value = pw.delivs.filter((d) => d.status === "done").length;
-    row.getCell(9).value = pw.delivs.filter((d) => d.status === "in_progress").length;
-    row.getCell(10).value = pw.delivs.filter((d) => d.status === "blocked").length;
-    row.getCell(11).value = { formula: `IF(G${r}=0,"",H${r}/G${r})` };
-    row.getCell(11).numFmt = "0%";
-    row.getCell(12).value = pw.objs.length;
-    row.getCell(13).value = objAvg ?? "";
-    row.getCell(13).numFmt = "0%";
-    row.getCell(14).value = allocAvg ?? "";
-    row.getCell(14).numFmt = "0%";
-    styleDataRow(row, 1, synLast, idx % 2 === 1);
-    for (let c = 2; c <= synLast; c++) row.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
-    if ((row.getCell(10).value as number) > 0) row.getCell(10).font = { bold: true, size: 10, color: { argb: "FFB91C1C" } };
-    row.height = 20;
-    r++;
-  });
-  const lastDataRow = r - 1;
-
-  // Ligne de total (formules)
-  if (perWeek.length) {
-    const tr = syn.getRow(r);
-    tr.getCell(1).value = "TOTAL";
-    tr.getCell(2).value = `${weeks.length} semaine(s)`;
-    for (const c of [3, 4, 5, 6, 7, 8, 9, 10, 12]) {
-      const L = colLetter(c);
-      tr.getCell(c).value = { formula: `SUM(${L}${firstDataRow}:${L}${lastDataRow})` };
-    }
-    tr.getCell(11).value = { formula: `IF(G${r}=0,"",H${r}/G${r})` };
-    tr.getCell(11).numFmt = "0%";
-    tr.getCell(13).value = { formula: `IFERROR(AVERAGE(M${firstDataRow}:M${lastDataRow}),"")` };
-    tr.getCell(13).numFmt = "0%";
-    tr.getCell(14).value = { formula: `IFERROR(AVERAGE(N${firstDataRow}:N${lastDataRow}),"")` };
-    tr.getCell(14).numFmt = "0%";
-    for (let c = 1; c <= synLast; c++) {
-      const cell = tr.getCell(c);
-      cell.font = { bold: true, size: 10, color: { argb: C.white } };
-      cell.fill = fill(C.accent);
-      cell.border = allBorders;
-      cell.alignment = { horizontal: c === 1 ? "left" : "center", vertical: "middle", indent: c === 1 ? 1 : 0 };
-    }
-    tr.height = 22;
-
-    syn.addConditionalFormatting({
-      ref: `K${firstDataRow}:K${lastDataRow}`,
-      rules: [
-        {
-          type: "dataBar",
-          priority: 1,
-          minLength: 0,
-          maxLength: 100,
-          gradient: false,
-          cfvo: [
-            { type: "num", value: 0 },
-            { type: "num", value: 1 },
-          ],
-          color: { argb: "FF34D399" },
-        } as any,
-      ],
-    });
-    syn.addConditionalFormatting({
-      ref: `M${firstDataRow}:M${lastDataRow}`,
-      rules: [
-        {
-          type: "dataBar",
-          priority: 2,
-          minLength: 0,
-          maxLength: 100,
-          gradient: false,
-          cfvo: [
-            { type: "num", value: 0 },
-            { type: "num", value: 1 },
-          ],
-          color: { argb: "FF60A5FA" },
-        } as any,
-      ],
-    });
-  }
-
-  // Légende
-  r += 2;
-  syn.getCell(r, 1).value = "Légende";
-  syn.getCell(r, 1).font = { bold: true, size: 10, color: { argb: C.muted } };
-  r++;
-  const legend: Array<[string, string, string]> = [
-    ...Object.values(PLAN_STATUS).filter((s) => s.label !== "Non renseigné").map((s) => [s.label, s.fill, s.font] as [string, string, string]),
-    ...Object.values(DELIV_STATUS).map((s) => [s.label, s.fill, s.font] as [string, string, string]),
-  ];
-  legend.forEach(([label, f, fo], i) => pill(syn.getCell(r, 1 + i), label, f, fo));
-  r++;
-  syn.getCell(r, 1).value = "Clique sur une semaine pour ouvrir sa feuille détaillée. Les allocations sont exprimées en % du temps de la semaine.";
-  syn.getCell(r, 1).font = { italic: true, size: 9, color: { argb: C.muted } };
-  setupPrint(syn);
-
-  /* ---------------- 2. CHARGE PROJETS (ETP) ---------------- */
-  const usedProjectIds = Array.from(new Set(data.planProjects.map((pp) => pp.project_id)));
-  const usedProjects = usedProjectIds
-    .map((id) => projectById.get(id))
-    .filter((p): p is ExportProject => !!p)
-    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
-
-  const cp = wb.addWorksheet("Charge projets", {
-    properties: { tabColor: { argb: C.accent } },
-    views: [{ state: "frozen", xSplit: 3, ySplit: 4, showGridLines: false }],
-  });
-  const cpLast = 3 + weeks.length + 1;
-  cp.getColumn(1).width = 3;
-  cp.getColumn(2).width = 12;
-  cp.getColumn(3).width = 32;
-  weeks.forEach((_, i) => (cp.getColumn(4 + i).width = 11));
-  cp.getColumn(cpLast).width = 12;
-  banner(cp, Math.max(cpLast, 6), "Charge par projet (ETP)", "1 ETP = une personne à 100 % sur la semaine. Somme des allocations de tous les BA.");
-
-  const cph = cp.getRow(4);
-  cph.getCell(1).value = "";
-  cph.getCell(2).value = "Code";
-  cph.getCell(3).value = "Projet";
-  weeks.forEach((w, i) => (cph.getCell(4 + i).value = `S${isoWeekNumber(w)}\n${shortDate(w)}`));
-  cph.getCell(cpLast).value = "Moyenne";
-  styleHeaderRow(cph, 1, cpLast);
-  cph.height = 32;
-
-  let cr = 5;
-  const cpFirst = cr;
-  if (!usedProjects.length) {
-    emptyLine(cp, cr, cpLast, "Aucune allocation projet sur la période.");
-    cr++;
-  }
-  usedProjects.forEach((p, idx) => {
-    const row = cp.getRow(cr);
-    row.getCell(1).fill = fill(argb(p.color));
-    row.getCell(2).value = p.code;
-    row.getCell(3).value = p.name;
-    perWeek.forEach((pw, i) => {
-      const sum = pw.pps.filter((pp) => pp.project_id === p.id).reduce((s, pp) => s + pp.allocation_percent, 0);
-      const cell = row.getCell(4 + i);
-      cell.value = sum ? sum / 100 : null;
-      cell.numFmt = "0.00";
-    });
-    row.getCell(cpLast).value = {
-      formula: `IFERROR(AVERAGE(${colLetter(4)}${cr}:${colLetter(3 + weeks.length)}${cr}),0)`,
-    };
-    row.getCell(cpLast).numFmt = "0.00";
-    styleDataRow(row, 2, cpLast, idx % 2 === 1);
-    row.getCell(1).border = allBorders;
-    for (let c = 4; c <= cpLast; c++) row.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
-    row.getCell(cpLast).font = { bold: true, size: 10 };
-    row.getCell(2).font = { bold: true, size: 10, color: { argb: argb(p.color) } };
-    cr++;
-  });
-  if (usedProjects.length) {
-    const tr = cp.getRow(cr);
-    tr.getCell(3).value = "Total ETP";
-    for (let c = 4; c <= cpLast; c++) {
-      const L = colLetter(c);
-      tr.getCell(c).value = { formula: `SUM(${L}${cpFirst}:${L}${cr - 1})` };
-      tr.getCell(c).numFmt = "0.00";
-    }
-    for (let c = 1; c <= cpLast; c++) {
-      const cell = tr.getCell(c);
-      cell.fill = fill(C.accent);
-      cell.font = { bold: true, size: 10, color: { argb: C.white } };
-      cell.border = allBorders;
-      cell.alignment = { horizontal: c <= 3 ? "left" : "center", vertical: "middle", indent: c === 3 ? 1 : 0 };
-    }
-    cp.addConditionalFormatting({
-      ref: `D${cpFirst}:${colLetter(3 + weeks.length)}${cr - 1}`,
-      rules: [
-        {
-          type: "colorScale",
-          priority: 1,
-          cfvo: [{ type: "min" }, { type: "max" }],
-          color: [{ argb: "FFF8FAFC" }, { argb: "FF93C5FD" }],
-        },
-      ],
-    });
-  }
-  setupPrint(cp);
-
-  /* ---------------- 3. ALLOCATION PAR BA (%) ---------------- */
+  /* ---------------- 1. ALLOCATION PAR BA (%) ---------------- */
   const ab = wb.addWorksheet("Allocation BA", {
-    properties: { tabColor: { argb: "FF7C3AED" } },
+    properties: { tabColor: { argb: C.navy } },
     views: [{ state: "frozen", xSplit: 2, ySplit: 4, showGridLines: false }],
   });
   const abLast = 2 + weeks.length + 1;
@@ -597,7 +335,20 @@ export async function buildWeeklyReport(data: ExportData): Promise<Buffer> {
   ab.getColumn(2).width = 16;
   weeks.forEach((_, i) => (ab.getColumn(3 + i).width = 11));
   ab.getColumn(abLast).width = 12;
-  banner(ab, Math.max(abLast, 6), "Allocation totale par BA (%)", "Vert = 100 %   ·   Orange = sous-alloué   ·   Rouge = sur-alloué (> 100 %)   ·   vide = pas de plan");
+  banner(
+    ab,
+    Math.max(abLast, 6),
+    "BA Tracker — Allocation totale par BA (%)",
+    `${periodLabel}   ·   ${data.scopeLabel}   ·   Généré le ${generated} par ${data.generatedBy}`,
+  );
+  ab.getCell(2, 1).alignment = { vertical: "middle", indent: 1, wrapText: true };
+  ab.getRow(2).height = 30;
+  ab.mergeCells(3, 1, 3, Math.max(abLast, 6));
+  const abLegend = ab.getCell(3, 1);
+  abLegend.value = "Vert = 100 %   ·   Orange = sous-alloué   ·   Rouge = sur-alloué (> 100 %)   ·   vide = semaine non renseignée";
+  abLegend.font = { italic: true, size: 9, color: { argb: C.muted } };
+  abLegend.alignment = { vertical: "middle", indent: 1, wrapText: true };
+  ab.getRow(3).height = 26;
 
   const abh = ab.getRow(4);
   abh.getCell(1).value = "Membre";
@@ -646,7 +397,7 @@ export async function buildWeeklyReport(data: ExportData): Promise<Buffer> {
   }
   setupPrint(ab);
 
-  /* ---------------- 4. UNE FEUILLE PAR SEMAINE ---------------- */
+  /* ---------------- 2. UNE FEUILLE PAR SEMAINE ---------------- */
   const WCOLS = [
     { key: "a", w: 24 },
     { key: "b", w: 14 },
@@ -675,74 +426,32 @@ export async function buildWeeklyReport(data: ExportData): Promise<Buffer> {
 
     // Lien retour
     const back = ws.getCell(3, wLast);
-    back.value = { text: "← Synthèse", hyperlink: "#'Synthèse'!A1" };
+    back.value = { text: "← Allocation BA", hyperlink: "#'Allocation BA'!A1" };
     back.font = { color: { argb: C.accent }, underline: true, size: 9 };
     back.alignment = { horizontal: "right" };
 
     const done = pw.delivs.filter((d) => d.status === "done").length;
     const blocked = pw.delivs.filter((d) => d.status === "blocked").length;
     const objAvg = pw.objs.length ? Math.round(pw.objs.reduce((s, o) => s + o.progress, 0) / pw.objs.length) : null;
+    const inProg = pw.delivs.filter((d) => d.status === "in_progress").length;
     kpiStrip(
       ws,
       4,
       [
-        { label: "Plans renseignés", value: `${pw.plans.length} / ${members.length}` },
-        { label: "Validés", value: pw.plans.filter((p) => p.status === "validated").length, color: "FF047857" },
         { label: "Livrables", value: pw.delivs.length },
         { label: "Terminés", value: pw.delivs.length ? `${done} (${Math.round((done / pw.delivs.length) * 100)} %)` : "0", color: "FF047857" },
+        { label: "En cours", value: inProg, color: "FF1D4ED8" },
         { label: "Bloqués", value: blocked, color: blocked ? "FFB91C1C" : C.text },
-        { label: "Objectifs", value: objAvg === null ? "0" : `${pw.objs.length} · ${objAvg} %` },
+        { label: "Objectifs", value: pw.objs.length },
+        { label: "Progression moy.", value: objAvg === null ? "—" : `${objAvg} %`, color: "FF047857" },
       ],
       wLast,
     );
 
     let row = 7;
 
-    /* --- A. Statut des plans --- */
-    sectionTitle(ws, row, wLast, "1. Statut des plans", `${members.length} membre(s)`);
-    row++;
-    const h1 = ws.getRow(row);
-    ["Membre", "Service", "Commentaires", "Congés sur la semaine", "Statut", "Allocation totale", "Bench", "Livrables terminés"].forEach(
-      (h, i) => (h1.getCell(i + 1).value = h),
-    );
-    styleHeaderRow(h1, 1, wLast);
-    row++;
-    const weekEnd = addDaysIso(pw.week, 6);
-    members.forEach((u, idx) => {
-      const plan = pw.plans.find((p) => p.user_id === u.id);
-      const pps = plan ? pw.pps.filter((pp) => pp.plan_id === plan.id) : [];
-      const alloc = pps.reduce((s, pp) => s + pp.allocation_percent, 0);
-      const ud = plan ? pw.delivs.filter((d) => d.plan_id === plan.id) : [];
-      const vac = data.vacations
-        .filter((v) => v.user_id === u.id && v.start_date <= weekEnd && v.end_date >= pw.week)
-        .map((v) => `${shortDate(v.start_date)} → ${shortDate(v.end_date)}${v.status !== "approved" ? " (en attente)" : ""}`)
-        .join("\n");
-
-      const rr = ws.getRow(row);
-      rr.getCell(1).value = u.full_name;
-      rr.getCell(2).value = u.service_line ?? "—";
-      rr.getCell(3).value = plan?.general_comments || "";
-      rr.getCell(4).value = vac || "";
-      rr.getCell(6).value = plan ? alloc / 100 : null;
-      rr.getCell(6).numFmt = "0%";
-      rr.getCell(7).value = plan?.bench ?? null;
-      rr.getCell(8).value = plan ? `${ud.filter((d) => d.status === "done").length} / ${ud.length}` : "—";
-      styleDataRow(rr, 1, wLast, idx % 2 === 1);
-      const st = PLAN_STATUS[plan?.status ?? "none"];
-      pill(rr.getCell(5), st.label, st.fill, st.font);
-      rr.getCell(1).font = { bold: true, size: 10 };
-      for (const c of [6, 7, 8]) rr.getCell(c).alignment = { horizontal: "center", vertical: "top" };
-      if (plan && alloc > 100) rr.getCell(6).font = { bold: true, size: 10, color: { argb: "FFB91C1C" } };
-      else if (plan && alloc === 100) rr.getCell(6).font = { bold: true, size: 10, color: { argb: "FF047857" } };
-      else if (plan) rr.getCell(6).font = { size: 10, color: { argb: "FFB45309" } };
-      if (vac) rr.getCell(4).font = { size: 10, color: { argb: "FF7C3AED" } };
-      row++;
-    });
-    if (!members.length) emptyLine(ws, row++, wLast, "Aucun membre.");
-    row++;
-
-    /* --- B. Allocations par projet --- */
-    sectionTitle(ws, row, wLast, "2. Allocations par projet", "répartition du temps de chaque BA");
+    /* --- 1. Allocations par projet --- */
+    sectionTitle(ws, row, wLast, "1. Allocations par projet", "répartition du temps de chaque BA");
     row++;
     const h2 = ws.getRow(row);
     ["Membre", "Code projet", "Projet", "", "", "Allocation", "ETP", ""].forEach((h, i) => (h2.getCell(i + 1).value = h));
@@ -823,8 +532,8 @@ export async function buildWeeklyReport(data: ExportData): Promise<Buffer> {
     }
     row++;
 
-    /* --- C. Livrables --- */
-    sectionTitle(ws, row, wLast, "3. Livrables", `${pw.delivs.length} livrable(s) · ${done} terminé(s) · ${blocked} bloqué(s)`);
+    /* --- 2. Livrables --- */
+    sectionTitle(ws, row, wLast, "2. Livrables", `${pw.delivs.length} livrable(s) · ${done} terminé(s) · ${blocked} bloqué(s)`);
     row++;
     const h3 = ws.getRow(row);
     ["Membre", "Projet", "Livrable", "Description", "Priorité", "Statut", "Échéance", "Terminé le"].forEach(
@@ -868,8 +577,8 @@ export async function buildWeeklyReport(data: ExportData): Promise<Buffer> {
     else ws.autoFilter = { from: { row: delivHeaderRow, column: 1 }, to: { row: row - 1, column: wLast } };
     row++;
 
-    /* --- D. Objectifs --- */
-    sectionTitle(ws, row, wLast, "4. Objectifs de la semaine", objAvg === null ? "aucun" : `progression moyenne ${objAvg} %`);
+    /* --- 3. Objectifs --- */
+    sectionTitle(ws, row, wLast, "3. Objectifs de la semaine", objAvg === null ? "aucun" : `progression moyenne ${objAvg} %`);
     row++;
     const h4 = ws.getRow(row);
     ["Membre", "Projet", "Objectif", "Description", "Progression", "Statut", "Date cible", ""].forEach(
@@ -926,7 +635,7 @@ export async function buildWeeklyReport(data: ExportData): Promise<Buffer> {
     setupPrint(ws);
   }
 
-  /* ---------------- 5. OBJECTIFS HORS SEMAINE ---------------- */
+  /* ---------------- 3. OBJECTIFS HORS SEMAINE ---------------- */
   const loose = data.objectives.filter((o) => !o.plan_id);
   if (loose.length) {
     const ws = wb.addWorksheet("Objectifs long terme", {

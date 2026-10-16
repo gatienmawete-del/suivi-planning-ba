@@ -18,7 +18,7 @@ import {
   Users2,
 } from "lucide-react";
 import { ExportDialog } from "@/components/export-dialog";
-import { DELIVERABLE_STATUS_LABELS, DELIVERABLE_STATUS_COLORS, PLAN_STATUS_LABELS } from "@/lib/types";
+import { DELIVERABLE_STATUS_LABELS, DELIVERABLE_STATUS_COLORS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -151,9 +151,9 @@ async function PersonalDashboard({
             <div>
               <CardTitle>Mes livrables de la semaine</CardTitle>
               <CardDescription>
-                {currentPlan
-                  ? `Statut du plan : ${PLAN_STATUS_LABELS[currentPlan.status as keyof typeof PLAN_STATUS_LABELS]}`
-                  : "Plan non encore démarré"}
+                {total > 0
+                  ? `${done} terminé(s) · ${inProgress} en cours · ${blocked} bloqué(s)`
+                  : "Aucun livrable renseigné"}
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm" asChild>
@@ -332,8 +332,10 @@ async function TeamDashboard({
   const totalBlocked = allDeliverables.filter((d: any) => d.status === "blocked").length;
   const globalCompletion = totalDeliverables ? Math.round((totalDone / totalDeliverables) * 100) : 0;
 
-  const plansSubmitted = plans.filter((p: any) => p.status === "submitted" || p.status === "validated").length;
-  const plansValidated = plans.filter((p: any) => p.status === "validated").length;
+  const objAvgProgress = objectives.length
+    ? Math.round(objectives.reduce((s: number, o: any) => s + (o.progress ?? 0), 0) / objectives.length)
+    : 0;
+  const objAtRisk = objectives.filter((o: any) => o.status === "at_risk").length;
 
   return (
     <div className="space-y-6">
@@ -386,11 +388,12 @@ async function TeamDashboard({
           tone={totalBlocked > 0 ? "red" : "slate"}
         />
         <KpiCard
-          label="Plans soumis"
-          value={`${plansSubmitted}/${users.length}`}
-          hint={`${plansValidated} validé(s)`}
-          icon={TrendingUp}
-          tone={plansSubmitted === users.length ? "emerald" : "amber"}
+          label="Objectifs en cours"
+          value={objectives.length}
+          hint={`Progression moyenne ${objAvgProgress}%${objAtRisk ? ` · ${objAtRisk} à risque` : ""}`}
+          icon={Target}
+          tone={objAtRisk > 0 ? "amber" : "emerald"}
+          progress={objAvgProgress}
         />
       </div>
 
@@ -398,8 +401,8 @@ async function TeamDashboard({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Statut des plans par membre</CardTitle>
-            <CardDescription>Récapitulatif de la semaine pour chaque BA</CardDescription>
+            <CardTitle>Activité par membre</CardTitle>
+            <CardDescription>Livrables de la semaine et objectifs en cours de chaque BA</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -415,7 +418,10 @@ async function TeamDashboard({
                 (s: number, p: any) => s + (p.allocation_percent ?? 0),
                 0,
               );
-              const planStatus = userPlan?.status ?? "draft";
+              const uObjectives = objectives.filter((o: any) => o.user_id === u.id);
+              const uObjAvg = uObjectives.length
+                ? Math.round(uObjectives.reduce((s: number, o: any) => s + (o.progress ?? 0), 0) / uObjectives.length)
+                : null;
 
               return (
                 <div
@@ -431,21 +437,6 @@ async function TeamDashboard({
                   </div>
 
                   <div className="flex flex-1 flex-wrap items-center gap-3">
-                    <Badge
-                      variant={
-                        planStatus === "validated"
-                          ? "default"
-                          : planStatus === "submitted"
-                            ? "secondary"
-                            : "outline"
-                      }
-                      className="shrink-0"
-                    >
-                      {!userPlan
-                        ? "Pas de plan"
-                        : PLAN_STATUS_LABELS[planStatus as keyof typeof PLAN_STATUS_LABELS]}
-                    </Badge>
-
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Livrables:</span>
                       <span className="text-xs font-medium">
@@ -470,6 +461,14 @@ async function TeamDashboard({
                         }`}
                       >
                         {uAllocation}%
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Objectifs:</span>
+                      <span className="text-xs font-medium">
+                        {uObjectives.length}
+                        {uObjAvg !== null && ` · ${uObjAvg}%`}
                       </span>
                     </div>
 

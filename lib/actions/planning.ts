@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { DeliverableStatus, DeliverablePriority, PlanStatus } from "@/lib/types";
+import type { DeliverableStatus, DeliverablePriority } from "@/lib/types";
 
 /**
  * Récupère ou crée le plan de la semaine pour un user.
@@ -55,30 +55,6 @@ export async function updatePlanMeta(input: z.infer<typeof updatePlanSchema>) {
   if (error) throw error;
   revalidatePath("/planning");
   revalidatePath("/dashboard");
-}
-
-export async function submitPlan(planId: string) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("weekly_plans")
-    .update({ status: "submitted" as PlanStatus, submitted_at: new Date().toISOString() })
-    .eq("id", planId);
-  if (error) throw error;
-  revalidatePath("/planning");
-  revalidatePath("/dashboard");
-}
-
-export async function validatePlan(planId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Non authentifié");
-
-  const { error } = await supabase
-    .from("weekly_plans")
-    .update({ status: "validated" as PlanStatus, validated_at: new Date().toISOString() })
-    .eq("id", planId);
-  if (error) throw error;
-  revalidatePath("/admin/team");
 }
 
 // ---------- Projets dans le plan ----------

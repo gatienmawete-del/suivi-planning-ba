@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   updatePlanMeta,
-  submitPlan,
   upsertPlanProject,
   deletePlanProject,
   createDeliverable,
@@ -40,8 +39,6 @@ import { Progress } from "@/components/ui/progress";
 import {
   Plus,
   Trash2,
-  Send,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CalendarDays,
@@ -57,13 +54,12 @@ import {
   DELIVERABLE_STATUS_COLORS,
   PRIORITY_LABELS,
   PRIORITY_COLORS,
-  PLAN_STATUS_LABELS,
   type Deliverable,
   type DeliverableStatus,
   type DeliverablePriority,
   type Project,
 } from "@/lib/types";
-import { addDays, isoDate, isCurrentWeek, isPastWeek } from "@/lib/utils";
+import { addDays, isoDate, isPastWeek } from "@/lib/utils";
 
 type Objective = {
   id: string;
@@ -118,22 +114,9 @@ export function PlanningClient(props: Props) {
     }
   }
 
-  async function handleSubmit() {
-    if (!confirm("Soumettre ce planning hebdomadaire pour validation ?")) return;
-    startTransition(async () => {
-      await submitPlan(props.plan.id);
-      router.refresh();
-    });
-  }
-
-  const isValidated = props.plan.status === "validated";
-  const isSubmitted = props.plan.status === "submitted";
+  // Semaines passées = archivées (lecture seule). Semaine courante et futures = modifiables.
   const pastWeek = isPastWeek(props.weekStart);
-  const currentWeek = isCurrentWeek(props.weekStart);
-  // Semaines passées = archivées (lecture seule). Semaine courante = modifiable (sauf si validé)
-  const locked = pastWeek || isValidated;
-  // Les objectifs restent toujours modifiables pour la semaine en cours
-  const objectivesLocked = pastWeek && !currentWeek;
+  const locked = pastWeek;
 
   return (
     <div className="space-y-6">
@@ -152,21 +135,6 @@ export function PlanningClient(props: Props) {
           <p className="mt-1 text-sm text-muted-foreground">
             Renseigne tes projets, livrables, objectifs et commentaires pour la semaine.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={isValidated ? "default" : isSubmitted ? "secondary" : "outline"}>
-            {PLAN_STATUS_LABELS[props.plan.status as keyof typeof PLAN_STATUS_LABELS]}
-          </Badge>
-          {!locked && props.plan.status === "draft" && (
-            <Button onClick={handleSubmit}>
-              <Send className="h-4 w-4" /> Soumettre
-            </Button>
-          )}
-          {isValidated && (
-            <Badge variant="default" className="gap-1">
-              <CheckCircle2 className="h-3 w-3" /> Validé
-            </Badge>
-          )}
         </div>
       </div>
 
@@ -370,7 +338,7 @@ export function PlanningClient(props: Props) {
           <AddObjectiveDialog
             planId={props.plan.id}
             projects={props.allProjects}
-            disabled={objectivesLocked}
+            disabled={locked}
           />
         </CardHeader>
         <CardContent>
@@ -381,7 +349,7 @@ export function PlanningClient(props: Props) {
           ) : (
             <div className="space-y-3">
               {props.objectives.map((obj) => (
-                <ObjectiveCard key={obj.id} obj={obj} projects={props.allProjects} disabled={objectivesLocked} />
+                <ObjectiveCard key={obj.id} obj={obj} projects={props.allProjects} disabled={locked} />
               ))}
             </div>
           )}

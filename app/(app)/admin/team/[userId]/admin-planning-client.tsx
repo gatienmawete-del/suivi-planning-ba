@@ -10,8 +10,6 @@ import {
   adminCreateDeliverable,
   adminUpdateDeliverable,
   adminDeleteDeliverable,
-  adminValidatePlan,
-  adminResetPlanToDraft,
   updateUser,
 } from "@/lib/actions/admin";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,8 +47,6 @@ import {
   FolderKanban,
   Flag,
   ArrowLeft,
-  CheckCircle2,
-  RotateCcw,
   UserCog,
 } from "lucide-react";
 import {
@@ -58,7 +54,6 @@ import {
   DELIVERABLE_STATUS_COLORS,
   PRIORITY_LABELS,
   PRIORITY_COLORS,
-  PLAN_STATUS_LABELS,
   type Deliverable,
   type DeliverableStatus,
   type DeliverablePriority,
@@ -110,22 +105,6 @@ export function AdminPlanningClient(props: Props) {
     }
   }
 
-  async function handleValidate() {
-    if (!confirm("Valider ce planning ?")) return;
-    startTransition(async () => {
-      await adminValidatePlan(props.plan.id);
-      router.refresh();
-    });
-  }
-
-  async function handleResetDraft() {
-    if (!confirm("Remettre ce planning en brouillon ? Le BA pourra le modifier à nouveau.")) return;
-    startTransition(async () => {
-      await adminResetPlanToDraft(props.plan.id);
-      router.refresh();
-    });
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -159,19 +138,6 @@ export function AdminPlanningClient(props: Props) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={props.plan.status === "validated" ? "default" : props.plan.status === "submitted" ? "secondary" : "outline"}>
-            {PLAN_STATUS_LABELS[props.plan.status as keyof typeof PLAN_STATUS_LABELS]}
-          </Badge>
-          {(props.plan.status === "submitted" || props.plan.status === "draft") && (
-            <Button size="sm" onClick={handleValidate}>
-              <CheckCircle2 className="h-4 w-4" /> Valider
-            </Button>
-          )}
-          {props.plan.status !== "draft" && (
-            <Button size="sm" variant="outline" onClick={handleResetDraft}>
-              <RotateCcw className="h-4 w-4" /> Remettre en brouillon
-            </Button>
-          )}
           <Button size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
             <UserCog className="h-4 w-4" /> Gérer les projets affectés
           </Button>

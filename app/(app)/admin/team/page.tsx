@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { mondayOf, isoDate, weekLabel } from "@/lib/utils";
 import { TeamNav } from "./team-nav";
@@ -16,7 +15,6 @@ import {
   CalendarDays,
   ExternalLink,
 } from "lucide-react";
-import { PLAN_STATUS_LABELS, VACATION_STATUS_LABELS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +44,11 @@ export default async function TeamPage({
 
   const teamStats = {
     total: users?.length ?? 0,
-    submitted: (plans ?? []).filter((p: any) => p.status === "submitted" || p.status === "validated").length,
+    deliverables: (plans ?? []).reduce((s: number, p: any) => s + p.deliverables.length, 0),
+    done: (plans ?? []).reduce(
+      (s: number, p: any) => s + p.deliverables.filter((d: any) => d.status === "done").length,
+      0,
+    ),
     inProgress: (plans ?? []).reduce(
       (s: number, p: any) =>
         s + p.deliverables.filter((d: any) => d.status === "in_progress").length,
@@ -83,8 +85,8 @@ export default async function TeamPage({
           tone="slate"
         />
         <KpiMini
-          label="Plannings soumis"
-          value={`${teamStats.submitted}/${teamStats.total}`}
+          label="Livrables terminés"
+          value={`${teamStats.done}/${teamStats.deliverables}`}
           icon={CheckCircle2}
           tone="emerald"
         />
@@ -125,21 +127,6 @@ export default async function TeamPage({
                       </CardDescription>
                     </div>
                   </div>
-                  {plan ? (
-                    <Badge
-                      variant={
-                        plan.status === "validated"
-                          ? "default"
-                          : plan.status === "submitted"
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {PLAN_STATUS_LABELS[plan.status as keyof typeof PLAN_STATUS_LABELS]}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">Non démarré</Badge>
-                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -178,9 +165,6 @@ export default async function TeamPage({
                       <span>bench {plan.bench ?? 0}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {plan.status === "submitted" && (
-                        <TeamActions planId={plan.id} />
-                      )}
                       <Link
                         href={`/admin/team/${u.id}?week=${weekStart}`}
                         className="ml-auto inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"

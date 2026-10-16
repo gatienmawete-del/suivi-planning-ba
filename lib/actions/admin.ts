@@ -308,28 +308,6 @@ export async function adminDeleteDeliverable(id: string) {
   revalidatePath("/admin/team");
 }
 
-export async function adminValidatePlan(planId: string) {
-  await requireAdmin();
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("weekly_plans")
-    .update({ status: "validated", validated_at: new Date().toISOString() })
-    .eq("id", planId);
-  if (error) throw error;
-  revalidatePath("/admin/team");
-}
-
-export async function adminResetPlanToDraft(planId: string) {
-  await requireAdmin();
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("weekly_plans")
-    .update({ status: "draft", submitted_at: null, validated_at: null })
-    .eq("id", planId);
-  if (error) throw error;
-  revalidatePath("/admin/team");
-}
-
 // ---------- Projects ----------
 
 const projectSchema = z.object({

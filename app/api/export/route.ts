@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 
   let plansQ = admin
     .from("weekly_plans")
-    .select("id, user_id, week_start, status, bench, general_comments, submitted_at, validated_at")
+    .select("id, user_id, week_start")
     .gte("week_start", fromIso)
     .lte("week_start", toIso);
   if (filterUserId) plansQ = plansQ.eq("user_id", filterUserId);
@@ -86,16 +86,8 @@ export async function GET(req: NextRequest) {
     .is("plan_id", null);
   if (filterUserId) looseObjQ = looseObjQ.eq("user_id", filterUserId);
 
-  let vacQ = admin
-    .from("vacations")
-    .select("user_id, start_date, end_date, days_count, status")
-    .in("status", ["approved", "requested"])
-    .lte("start_date", toEndIso)
-    .gte("end_date", fromIso);
-  if (filterUserId) vacQ = vacQ.eq("user_id", filterUserId);
-
   try {
-    const [planProjects, deliverables, planObjectives, { data: looseObjectives }, { data: vacations }] =
+    const [planProjects, deliverables, planObjectives, { data: looseObjectives }] =
       await Promise.all([
         selectIn<any>(admin, "plan_projects", "plan_id, project_id, allocation_percent", "plan_id", planIds),
         selectIn<any>(
@@ -113,7 +105,6 @@ export async function GET(req: NextRequest) {
           planIds,
         ),
         looseObjQ,
-        vacQ,
       ]);
 
     const scopedUsers = filterUserId ? (users ?? []).filter((u) => u.id === filterUserId) : users ?? [];
@@ -133,7 +124,7 @@ export async function GET(req: NextRequest) {
       planProjects,
       deliverables,
       objectives: [...planObjectives, ...((looseObjectives ?? []) as any[])],
-      vacations: (vacations ?? []) as any,
+      vacations: [],
     };
 
     const buffer = await buildWeeklyReport(data);
